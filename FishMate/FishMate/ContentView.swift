@@ -1,45 +1,102 @@
+// MARK: - FishMate – Full SwiftUI Sample Project
+// iOS 16+
+// Features included:
+// 1) 釣魚揪團 (原功能)
+// 2) 成就分享 + 👍按讚、💬留言 (社群互動)
+// 3) 智慧推薦食譜：依魚種 + 魚長大小推薦
+// 4) 排行榜 + 成就徽章（自動解鎖）
+//
+// Project structure in a single file for easy copy-paste into a fresh project.
+// You can split into separate files later (AppState, Models, Views...).
+
 import SwiftUI
+import UIKit
 
-struct ContentView: View {
-    @State private var selectedFunction = 0
+// MARK: - App Entry
+//@main
+//struct FishMateApp: App {
+    //var body: some Scene {
+        //WindowGroup {
+            //ContentView()
+        //}
+    //}
+//}
 
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Text("🎣 FishMate")
-                    .font(.largeTitle)
-                    .bold()
+// MARK: - AppState (Shared Data)
+final class AppState: ObservableObject {
+    // Groups
+    @Published var groups: [FishingGroup] = [
+        FishingGroup(location: "高美濕地", date: Date(), note: "記得帶帽子！", participants: ["John", "Alice"]),
+        FishingGroup(location: "淡水漁港", date: Date().addingTimeInterval(86400), note: "早上風大請穿外套", participants: ["Sam"])
+    ]
 
-                Picker("功能選擇", selection: $selectedFunction) {
-                    Text("釣魚揪團").tag(0)
-                    Text("成就分享").tag(1)
-                    Text("菜單推薦").tag(2)
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding(.horizontal)
+    // Achievements (social)
+    @Published var achievements: [FishAchievement] = [
+        FishAchievement(username: "你", location: "福隆海灘", species: "吳郭魚", sizeCM: 28, likeCount: 2, comments: [Comment(author: "Alice", text: "好厲害！")]),
+        FishAchievement(username: "你", location: "基隆港", species: "鯛魚", sizeCM: 35, likeCount: 1, comments: [])
+    ] {
+        didSet { recomputeBadgesAndRanking() }
+    }
 
-                Divider()
+    // Badges
+    @Published var badges: [Badge] = [
+        Badge(key: .firstCatch, name: "初次釣魚", icon: "fish", achieved: false, description: "新增第一筆成就"),
+        Badge(key: .size50, name: "50cm 突破", icon: "star", achieved: false, description: "魚長達 50cm"),
+        Badge(key: .species10, name: "魚種收藏家", icon: "crown", achieved: false, description: "收集 10 種魚")
+    ]
 
-                Group {
-                    if selectedFunction == 0 {
-                        FishingGroupView()
-                    } else if selectedFunction == 1 {
-                        FishAchievementsView()
-                    } else {
-                        FishRecipeView()
-                    }
-                }
-                .padding()
+    // Rankings (recomputed from achievements)
+    @Published var rankings: [RankingEntry] = []
 
-                Spacer()
-            }
-            .navigationTitle("一起趣釣魚")
+    // Recipe DB (base)
+    let recipeDB: [String: [String]] = [
+        "吳郭魚": ["清蒸吳郭魚", "味噌魚湯", "酥炸吳郭魚"],
+        "鯛魚": ["香煎鯛魚排", "泰式檸檬鯛魚", "鯛魚味噌鍋"],
+        "鱸魚": ["紅燒鱸魚", "鱸魚排佐奶油醬"],
+        "鯖魚": ["味增煮鯖魚", "烤鯖魚"],
+        "石斑魚": ["清蒸石斑魚", "石斑魚鍋"]
+    ]
+
+    init() {
+        recomputeBadgesAndRanking()
+    }
+
+    // MARK: - Badge + Ranking Logic
+    func recomputeBadgesAndRanking() {
+        // Badges
+        var achievedBadges = Set<BadgeKey>()
+        if !achievements.isEmpty { achievedBadges.insert(.firstCatch) }
+        if achievements.contains(where: { $0.sizeCM >= 50 }) { achievedBadges.insert(.size50) }
+        let speciesCount = Set(achievements.map { $0.species }).count
+        if speciesCount >= 10 { achievedBadges.insert(.species10) }
+
+        badges = badges.map { b in
+            var nb = b
+            nb.achieved = achievedBadges.contains(b.key)
+            return nb
         }
+
+        // Rankings (simple demo):
+        // - 最大魚王: 依 sizeCM 最大
+        // - 最多魚種: 依 unique species 數
+        // - 最活躍釣友: 依成就筆數
+        let byUser = Dictionary(grouping: achievements, by: { $0.username })
+
+        var entries: [RankingEntry] = []
+        for (user, records) in byUser {
+            let maxSize = records.map { $0.sizeCM }.max() ?? 0
+            let uniqueSpecies = Set(records.map { $0.species }).count
+            let activity = records.count
+            entries.append(RankingEntry(username: user, title: "最大魚王", score: maxSize))
+            entries.append(RankingEntry(username: user, title: "最多魚種", score: uniqueSpecies))
+            entries.append(RankingEntry(username: user, title: "最活躍釣友", score: activity))
+        }
+        // Top 10 by score globally
+        rankings = entries.sorted { $0.score > $1.score }.prefix(10).map { $0 }
     }
 }
 
-// MARK: - Fishing Group
-
+// MARK: - Models
 struct FishingGroup: Identifiable {
     let id = UUID()
     let location: String
@@ -48,11 +105,81 @@ struct FishingGroup: Identifiable {
     var participants: [String]
 }
 
+struct Comment: Identifiable, Hashable {
+    let id = UUID()
+    let author: String
+    let text: String
+}
+
+struct FishAchievement: Identifiable {
+    let id = UUID()
+    let username: String
+    let location: String
+    let species: String
+    let sizeCM: Int
+    var likeCount: Int
+    var comments: [Comment]
+}
+
+enum BadgeKey: Hashable { case firstCatch, size50, species10 }
+
+struct Badge: Identifiable {
+    let id = UUID()
+    let key: BadgeKey
+    let name: String
+    let icon: String
+    var achieved: Bool
+    let description: String
+}
+
+struct RankingEntry: Identifiable {
+    let id = UUID()
+    let username: String
+    let title: String
+    let score: Int
+}
+
+// MARK: - Root UI
+struct ContentView: View {
+    @StateObject private var app = AppState()
+    @State private var selectedTab = 0
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 16) {
+                Text("🎣 FishMate").font(.largeTitle).bold()
+
+                Picker("功能選擇", selection: $selectedTab) {
+                    Text("釣魚揪團").tag(0)
+                    Text("成就分享").tag(1)
+                    Text("菜單推薦").tag(2)
+                    Text("排行/徽章").tag(3)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding(.horizontal)
+
+                Divider()
+
+                Group {
+                    switch selectedTab {
+                    case 0: FishingGroupView().environmentObject(app)
+                    case 1: FishAchievementsView().environmentObject(app)
+                    case 2: FishRecipeView().environmentObject(app)
+                    default: RankingBadgesView().environmentObject(app)
+                    }
+                }
+                .padding()
+
+                Spacer(minLength: 0)
+            }
+            .navigationTitle("一起趣釣魚")
+        }
+    }
+}
+
+// MARK: - Fishing Group
 struct FishingGroupView: View {
-    @State private var groups: [FishingGroup] = [
-        FishingGroup(location: "高美濕地", date: Date(), note: "記得帶帽子！", participants: ["John", "Alice"]),
-        FishingGroup(location: "淡水漁港", date: Date().addingTimeInterval(86400), note: "早上風大請穿外套", participants: ["Sam"])
-    ]
+    @EnvironmentObject var app: AppState
     @State private var showingCreateGroup = false
     @State private var selectedGroupIndex: Int? = nil
 
@@ -64,23 +191,21 @@ struct FishingGroupView: View {
                     .padding(.horizontal)
 
                 List {
-                    ForEach(groups.indices, id: \.self) { i in
+                    ForEach(app.groups.indices, id: \.self) { i in
                         ZStack {
                             if selectedGroupIndex == i {
                                 Color.gray.opacity(0.2)
-                            } else {
-                                Color.clear
-                            }
+                            } else { Color.clear }
 
                             VStack(alignment: .leading, spacing: 8) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("地點：\(groups[i].location)")
-                                    Text("時間：\(groups[i].date.formatted(.dateTime.month().day().hour().minute()))")
-                                    Text("說明：\(groups[i].note)")
-                                    Text("參加者：\(groups[i].participants.joined(separator: ", "))")
+                                    Text("地點：\(app.groups[i].location)")
+                                    Text("時間：\(app.groups[i].date.formatted(.dateTime.month().day().hour().minute()))")
+                                    Text("說明：\(app.groups[i].note)")
+                                    Text("參加者：\(app.groups[i].participants.joined(separator: ", "))")
                                 }
 
-                                if groups[i].participants.contains("你") {
+                                if app.groups[i].participants.contains("你") {
                                     Text("✅ 已參加")
                                         .font(.subheadline)
                                         .foregroundColor(.green)
@@ -91,9 +216,7 @@ struct FishingGroupView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .cornerRadius(8)
-                        .onTapGesture {
-                            selectedGroupIndex = i
-                        }
+                        .onTapGesture { selectedGroupIndex = i }
                     }
                 }
                 .listStyle(PlainListStyle())
@@ -108,8 +231,8 @@ struct FishingGroupView: View {
                 Spacer()
                 Button("我要參加") {
                     if let index = selectedGroupIndex {
-                        if !groups[index].participants.contains("你") {
-                            groups[index].participants.append("你")
+                        if !app.groups[index].participants.contains("你") {
+                            app.groups[index].participants.append("你")
                         }
                     }
                 }
@@ -123,9 +246,7 @@ struct FishingGroupView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    Button(action: {
-                        showingCreateGroup = true
-                    }) {
+                    Button(action: { showingCreateGroup = true }) {
                         Image(systemName: "plus")
                             .font(.title)
                             .padding()
@@ -140,7 +261,7 @@ struct FishingGroupView: View {
         }
         .sheet(isPresented: $showingCreateGroup) {
             CreateGroupView { newGroup in
-                groups.append(newGroup)
+                app.groups.append(newGroup)
             }
         }
     }
@@ -177,21 +298,11 @@ struct CreateGroupView: View {
     }
 }
 
-// MARK: - Achievements
-
-struct FishAchievement: Identifiable {
-    let id = UUID()
-    let location: String
-    let species: String
-    let size: String
-}
-
+// MARK: - Achievements (with Likes & Comments)
 struct FishAchievementsView: View {
-    @State private var achievements: [FishAchievement] = [
-        FishAchievement(location: "福隆海灘", species: "吳郭魚", size: "28cm"),
-        FishAchievement(location: "基隆港", species: "鯛魚", size: "35cm")
-    ]
+    @EnvironmentObject var app: AppState
     @State private var showingAdd = false
+    @State private var activeCommentsFor: FishAchievement? = nil
 
     var body: some View {
         ZStack {
@@ -200,23 +311,37 @@ struct FishAchievementsView: View {
                     .font(.headline)
                     .padding(.horizontal)
 
-                List(achievements) { fish in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading) {
-                            Text("地點：\(fish.location)")
-                            Text("魚種：\(fish.species)")
-                            Text("大小：\(fish.size)")
+                List {
+                    ForEach(app.achievements) { fish in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("使用者：\(fish.username)")
+                                    Text("地點：\(fish.location)")
+                                    Text("魚種：\(fish.species)")
+                                    Text("大小：\(fish.sizeCM) cm")
+                                }
+                                Spacer()
+                                Button(action: { shareAchievement(fish) }) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+
+                            HStack(spacing: 16) {
+                                Button(action: { like(fish) }) {
+                                    Label("\(fish.likeCount)", systemImage: "hand.thumbsup")
+                                }
+
+                                Button(action: { activeCommentsFor = fish }) {
+                                    Label("\(fish.comments.count)", systemImage: "text.bubble")
+                                }
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        Spacer()
-                        Button(action: {
-                            shareAchievement(fish)
-                        }) {
-                            Image(systemName: "square.and.arrow.up")
-                                .foregroundColor(.blue)
-                        }
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading) // ✅ 加這行
                 }
                 .listStyle(PlainListStyle())
                 .background(Color.clear)
@@ -228,24 +353,40 @@ struct FishAchievementsView: View {
 
             VStack {
                 Spacer()
-                Button("➕ 新增成就") {
-                    showingAdd = true
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal)
-                .padding(.bottom, 20)
+                Button("➕ 新增成就") { showingAdd = true }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
             }
         }
         .sheet(isPresented: $showingAdd) {
             FishMeasureView(onAdd: { newAchievement in
-                achievements.append(newAchievement)
+                app.achievements.append(newAchievement)
             })
+        }
+        .sheet(item: $activeCommentsFor) { ach in
+            CommentsSheet(achievement: ach) { text in
+                addComment(text, to: ach)
+            }
+        }
+    }
+
+    func like(_ achievement: FishAchievement) {
+        if let idx = app.achievements.firstIndex(where: { $0.id == achievement.id }) {
+            app.achievements[idx].likeCount += 1
+        }
+    }
+
+    func addComment(_ text: String, to achievement: FishAchievement) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if let idx = app.achievements.firstIndex(where: { $0.id == achievement.id }) {
+            app.achievements[idx].comments.append(Comment(author: "你", text: text))
         }
     }
 
     func shareAchievement(_ achievement: FishAchievement) {
-        let text = "我在 \(achievement.location) 釣到了一條 \(achievement.species)，大小 \(achievement.size)！🎣"
+        let text = "我在 \(achievement.location) 釣到了一條 \(achievement.species)，大小 \(achievement.sizeCM)cm！🎣"
         let activityVC = UIActivityViewController(activityItems: [text], applicationActivities: nil)
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootVC = scene.windows.first?.rootViewController {
@@ -254,11 +395,51 @@ struct FishAchievementsView: View {
     }
 }
 
+struct CommentsSheet: View {
+    let achievement: FishAchievement
+    var onSend: (String) -> Void
+
+    @Environment(\.dismiss) var dismiss
+    @State private var newText = ""
+
+    var body: some View {
+        NavigationView {
+            VStack(alignment: .leading) {
+                List {
+                    Section("留言") {
+                        ForEach(achievement.comments) { c in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(c.author).font(.caption).foregroundColor(.secondary)
+                                Text(c.text)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+
+                HStack {
+                    TextField("輸入留言…", text: $newText)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    Button("送出") {
+                        onSend(newText)
+                        newText = ""
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+            }
+            .navigationTitle("💬 留言板")
+            .toolbar { ToolbarItem(placement: .primaryAction) { Button("完成") { dismiss() } } }
+        }
+    }
+}
+
+// MARK: - Add Achievement Form
 struct FishMeasureView: View {
     @Environment(\.dismiss) var dismiss
     @State private var location = ""
     @State private var species = ""
-    @State private var size = ""
+    @State private var sizeText = ""
 
     var onAdd: (FishAchievement) -> Void
 
@@ -268,22 +449,24 @@ struct FishMeasureView: View {
                 Section(header: Text("釣魚資訊")) {
                     TextField("地點", text: $location)
                     TextField("魚種", text: $species)
-                    TextField("魚長 (公分)", text: $size)
+                    TextField("魚長 (公分)", text: $sizeText)
+                        .keyboardType(.numberPad)
                 }
 
                 Section {
-                    Button("📏 魚類識別及測量魚長") {
-                        size = "32"
+                    Button("📏（示範）自動測量 -> 32cm") {
+                        sizeText = "32"
                     }
                 }
 
                 Section {
                     Button("✅ 儲存成就") {
-                        let newFish = FishAchievement(location: location, species: species, size: size + "cm")
+                        let size = Int(sizeText) ?? 0
+                        let newFish = FishAchievement(username: "你", location: location, species: species, sizeCM: size, likeCount: 0, comments: [])
                         onAdd(newFish)
                         dismiss()
                     }
-                    .disabled(location.isEmpty || species.isEmpty || size.isEmpty)
+                    .disabled(location.isEmpty || species.isEmpty || sizeText.isEmpty)
                 }
             }
             .navigationTitle("新增成就")
@@ -291,30 +474,27 @@ struct FishMeasureView: View {
     }
 }
 
-// MARK: - Recipe
-
+// MARK: - Smart Recipe View
 struct FishRecipeView: View {
+    @EnvironmentObject var app: AppState
     @State private var fishName = ""
-    let recipeDB: [String: [String]] = [
-        "吳郭魚": ["清蒸吳郭魚", "味噌魚湯", "酥炸吳郭魚"],
-        "鯛魚": ["香煎鯛魚排", "泰式檸檬鯛魚", "鯛魚味噌鍋"],
-        "鱸魚": ["紅燒鱸魚", "鱸魚排佐奶油醬"],
-        "鯖魚": ["味增煮鯖魚", "烤鯖魚"],
-        "石斑魚": ["清蒸石斑魚", "石斑魚鍋"]
-        
-    ]
-
-    var recipes: [String] {
-        recipeDB[fishName] ?? ["沒有找到相關料理"]
-    }
+    @State private var sizeText = ""
+    @State private var pantry = "" // 預留：冰箱食材（可選）
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            TextField("輸入魚種名稱", text: $fishName)
+        VStack(alignment: .leading, spacing: 12) {
+            TextField("輸入魚種名稱（例：鯛魚）", text: $fishName)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+            TextField("輸入魚長（cm）", text: $sizeText)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .keyboardType(.numberPad)
+            TextField("可用食材（可留空，逗號分隔）", text: $pantry)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
 
-            Text("推薦菜單：")
-                .font(.headline)
+            Text("推薦菜單：").font(.headline)
+
+            let size = Int(sizeText) ?? 0
+            let recipes = smartRecipes(for: fishName, size: size, baseDB: app.recipeDB, pantry: pantry)
 
             ForEach(recipes, id: \.self) { dish in
                 HStack {
@@ -333,5 +513,117 @@ struct FishRecipeView: View {
             }
         }
         .padding(.horizontal)
+    }
+}
+
+func smartRecipes(for fish: String, size: Int, baseDB: [String: [String]], pantry: String) -> [String] {
+    let fallback = ["沒有找到相關料理"]
+    let base = baseDB[fish].map { Array($0.prefix(3)) } ?? fallback
+
+    // Size-based augment
+    var extra: [String] = []
+    if size > 0 {
+        if size < 30 {
+            extra += ["香煎\(fish)", "紅燒\(fish)"]
+        } else if size < 50 {
+            extra += ["清蒸\(fish)", "味噌湯\(fish)"]
+        } else {
+            extra += ["火鍋大餐：\(fish)", "鹽烤整尾\(fish)"]
+        }
+    }
+
+    // Pantry-based filter (simple contains-any matching)
+    let tokens = Set(pantry.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+    if !tokens.isEmpty {
+        let filtered = (base + extra).filter { dish in
+            // naive keywords match
+            let joined = dish
+            return tokens.contains(where: { joined.localizedCaseInsensitiveContains($0) })
+        }
+        if !filtered.isEmpty { return Array(filtered.prefix(6)) }
+    }
+
+    return Array((base + extra).prefix(6))
+}
+
+// MARK: - Ranking + Badges
+struct RankingBadgesView: View {
+    @EnvironmentObject var app: AppState
+    @State private var selection = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("", selection: $selection) {
+                Text("排行榜").tag(0)
+                Text("徽章").tag(1)
+            }
+            .pickerStyle(SegmentedPickerStyle())
+
+            if selection == 0 { RankingView() } else { BadgesView() }
+        }
+        .padding(.horizontal)
+    }
+}
+
+struct RankingView: View {
+    @EnvironmentObject var app: AppState
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("🏆 排行榜（示範）")
+                .font(.title3).bold()
+                .padding(.bottom, 6)
+
+            List(app.rankings) { r in
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(r.username).font(.headline)
+                        Text(r.title).font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text("\(r.score)")
+                        .font(.headline)
+                        .foregroundColor(.blue)
+                }
+            }
+            .listStyle(PlainListStyle())
+        }
+    }
+}
+
+struct BadgesView: View {
+    @EnvironmentObject var app: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("🎖 我的徽章")
+                .font(.title3).bold()
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(app.badges) { b in
+                        VStack(spacing: 8) {
+                            Image(systemName: b.icon)
+                                .font(.largeTitle)
+                                .foregroundColor(b.achieved ? .yellow : .gray)
+                                .padding()
+                                .background(
+                                    Circle().fill((b.achieved ? Color.yellow.opacity(0.2) : Color.gray.opacity(0.2)))
+                                )
+                            Text(b.name)
+                                .font(.caption)
+                            Text(b.description)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .frame(width: 100)
+                        }
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        }
     }
 }

@@ -1,37 +1,24 @@
-// MARK: - FishMate – Full SwiftUI Sample Project
-// iOS 16+
+// MARK: - FishMate – Full SwiftUI Sample Project (iOS 18+ Ready)
 // Features included:
 // 1) 釣魚揪團 (原功能)
 // 2) 成就分享 + 👍按讚、💬留言 (社群互動)
 // 3) 智慧推薦食譜：依魚種 + 魚長大小推薦
 // 4) 排行榜 + 成就徽章（自動解鎖）
-//
-// Project structure in a single file for easy copy-paste into a fresh project.
-// You can split into separate files later (AppState, Models, Views...).
 
 import SwiftUI
-import UIKit
 
-// MARK: - App Entry
-//@main
-//struct FishMateApp: App {
-    //var body: some Scene {
-        //WindowGroup {
-            //ContentView()
-        //}
-    //}
-//}
 
 // MARK: - AppState (Shared Data)
-final class AppState: ObservableObject {
+@Observable
+final class AppState {
     // Groups
-    @Published var groups: [FishingGroup] = [
-        FishingGroup(location: "高美濕地", date: Date(), note: "記得帶帽子！", participants: ["John", "Alice"]),
-        FishingGroup(location: "淡水漁港", date: Date().addingTimeInterval(86400), note: "早上風大請穿外套", participants: ["Sam"])
+    var groups: [FishingGroup] = [
+        FishingGroup(location: "高美濕地", date: .now, note: "記得帶帽子！", participants: ["John", "Alice"]),
+        FishingGroup(location: "淡水漁港", date: .now.addingTimeInterval(86400), note: "早上風大請穿外套", participants: ["Sam"])
     ]
 
     // Achievements (social)
-    @Published var achievements: [FishAchievement] = [
+    var achievements: [FishAchievement] = [
         FishAchievement(username: "你", location: "福隆海灘", species: "吳郭魚", sizeCM: 28, likeCount: 2, comments: [Comment(author: "Alice", text: "好厲害！")]),
         FishAchievement(username: "你", location: "基隆港", species: "鯛魚", sizeCM: 35, likeCount: 1, comments: [])
     ] {
@@ -39,14 +26,14 @@ final class AppState: ObservableObject {
     }
 
     // Badges
-    @Published var badges: [Badge] = [
+    var badges: [Badge] = [
         Badge(key: .firstCatch, name: "初次釣魚", icon: "fish", achieved: false, description: "新增第一筆成就"),
         Badge(key: .size50, name: "50cm 突破", icon: "star", achieved: false, description: "魚長達 50cm"),
         Badge(key: .species10, name: "魚種收藏家", icon: "crown", achieved: false, description: "收集 10 種魚")
     ]
 
     // Rankings (recomputed from achievements)
-    @Published var rankings: [RankingEntry] = []
+    var rankings: [RankingEntry] = []
 
     // Recipe DB (base)
     let recipeDB: [String: [String]] = [
@@ -57,9 +44,7 @@ final class AppState: ObservableObject {
         "石斑魚": ["清蒸石斑魚", "石斑魚鍋"]
     ]
 
-    init() {
-        recomputeBadgesAndRanking()
-    }
+    init() { recomputeBadgesAndRanking() }
 
     // MARK: - Badge + Ranking Logic
     func recomputeBadgesAndRanking() {
@@ -67,7 +52,7 @@ final class AppState: ObservableObject {
         var achievedBadges = Set<BadgeKey>()
         if !achievements.isEmpty { achievedBadges.insert(.firstCatch) }
         if achievements.contains(where: { $0.sizeCM >= 50 }) { achievedBadges.insert(.size50) }
-        let speciesCount = Set(achievements.map { $0.species }).count
+        let speciesCount = Set(achievements.map(\.species)).count
         if speciesCount >= 10 { achievedBadges.insert(.species10) }
 
         badges = badges.map { b in
@@ -76,22 +61,17 @@ final class AppState: ObservableObject {
             return nb
         }
 
-        // Rankings (simple demo):
-        // - 最大魚王: 依 sizeCM 最大
-        // - 最多魚種: 依 unique species 數
-        // - 最活躍釣友: 依成就筆數
-        let byUser = Dictionary(grouping: achievements, by: { $0.username })
-
+        // Rankings
+        let byUser = Dictionary(grouping: achievements, by: \.username)
         var entries: [RankingEntry] = []
         for (user, records) in byUser {
-            let maxSize = records.map { $0.sizeCM }.max() ?? 0
-            let uniqueSpecies = Set(records.map { $0.species }).count
+            let maxSize = records.map(\.sizeCM).max() ?? 0
+            let uniqueSpecies = Set(records.map(\.species)).count
             let activity = records.count
             entries.append(RankingEntry(username: user, title: "最大魚王", score: maxSize))
             entries.append(RankingEntry(username: user, title: "最多魚種", score: uniqueSpecies))
             entries.append(RankingEntry(username: user, title: "最活躍釣友", score: activity))
         }
-        // Top 10 by score globally
         rankings = entries.sorted { $0.score > $1.score }.prefix(10).map { $0 }
     }
 }
@@ -121,7 +101,7 @@ struct FishAchievement: Identifiable {
     var comments: [Comment]
 }
 
-enum BadgeKey: Hashable { case firstCatch, size50, species10 }
+enum BadgeKey: Hashable, Sendable { case firstCatch, size50, species10 }
 
 struct Badge: Identifiable {
     let id = UUID()
@@ -141,11 +121,11 @@ struct RankingEntry: Identifiable {
 
 // MARK: - Root UI
 struct ContentView: View {
-    @StateObject private var app = AppState()
+    @State private var app = AppState()
     @State private var selectedTab = 0
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 16) {
                 Text("🎣 FishMate").font(.largeTitle).bold()
 
@@ -155,17 +135,17 @@ struct ContentView: View {
                     Text("菜單推薦").tag(2)
                     Text("排行/徽章").tag(3)
                 }
-                .pickerStyle(SegmentedPickerStyle())
+                .pickerStyle(.segmented)
                 .padding(.horizontal)
 
                 Divider()
 
                 Group {
                     switch selectedTab {
-                    case 0: FishingGroupView().environmentObject(app)
-                    case 1: FishAchievementsView().environmentObject(app)
-                    case 2: FishRecipeView().environmentObject(app)
-                    default: RankingBadgesView().environmentObject(app)
+                    case 0: FishingGroupView(app: app)
+                    case 1: FishAchievementsView(app: app)
+                    case 2: FishRecipeView(app: app)
+                    default: RankingBadgesView(app: app)
                     }
                 }
                 .padding()
@@ -179,7 +159,7 @@ struct ContentView: View {
 
 // MARK: - Fishing Group
 struct FishingGroupView: View {
-    @EnvironmentObject var app: AppState
+    @Bindable var app: AppState
     @State private var showingCreateGroup = false
     @State private var selectedGroupIndex: Int? = nil
 
@@ -219,8 +199,8 @@ struct FishingGroupView: View {
                         .onTapGesture { selectedGroupIndex = i }
                     }
                 }
-                .listStyle(PlainListStyle())
-                .background(Color.clear)
+                .listStyle(.plain)
+                .background(.clear)
                 .scrollContentBackground(.hidden)
 
                 Spacer(minLength: 0)
@@ -250,7 +230,7 @@ struct FishingGroupView: View {
                         Image(systemName: "plus")
                             .font(.title)
                             .padding()
-                            .background(Color.blue)
+                            .background(.blue)
                             .foregroundColor(.white)
                             .clipShape(Circle())
                             .shadow(radius: 4)
@@ -275,7 +255,7 @@ struct CreateGroupView: View {
     var onCreate: (FishingGroup) -> Void
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("揪團資訊")) {
                     TextField("釣場地點", text: $location)
@@ -300,7 +280,7 @@ struct CreateGroupView: View {
 
 // MARK: - Achievements (with Likes & Comments)
 struct FishAchievementsView: View {
-    @EnvironmentObject var app: AppState
+    @Bindable var app: AppState
     @State private var showingAdd = false
     @State private var activeCommentsFor: FishAchievement? = nil
 
@@ -322,10 +302,7 @@ struct FishAchievementsView: View {
                                     Text("大小：\(fish.sizeCM) cm")
                                 }
                                 Spacer()
-                                Button(action: { shareAchievement(fish) }) {
-                                    Image(systemName: "square.and.arrow.up")
-                                        .foregroundColor(.blue)
-                                }
+                                ShareButton(achievement: fish)
                             }
 
                             HStack(spacing: 16) {
@@ -343,8 +320,8 @@ struct FishAchievementsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .listStyle(PlainListStyle())
-                .background(Color.clear)
+                .listStyle(.plain)
+                .background(.clear)
                 .scrollContentBackground(.hidden)
 
                 Spacer(minLength: 0)
@@ -384,14 +361,27 @@ struct FishAchievementsView: View {
             app.achievements[idx].comments.append(Comment(author: "你", text: text))
         }
     }
+}
 
-    func shareAchievement(_ achievement: FishAchievement) {
+struct ShareButton: View {
+    let achievement: FishAchievement
+
+    var body: some View {
+        Button(action: { shareAchievement() }) {
+            Image(systemName: "square.and.arrow.up")
+                .foregroundColor(.blue)
+        }
+    }
+
+    func shareAchievement() {
         let text = "我在 \(achievement.location) 釣到了一條 \(achievement.species)，大小 \(achievement.sizeCM)cm！🎣"
+#if canImport(UIKit)
         let activityVC = UIActivityViewController(activityItems: [text], applicationActivities: nil)
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootVC = scene.windows.first?.rootViewController {
             rootVC.present(activityVC, animated: true)
         }
+#endif
     }
 }
 
@@ -403,7 +393,7 @@ struct CommentsSheet: View {
     @State private var newText = ""
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(alignment: .leading) {
                 List {
                     Section("留言") {
@@ -419,7 +409,7 @@ struct CommentsSheet: View {
 
                 HStack {
                     TextField("輸入留言…", text: $newText)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .textFieldStyle(.roundedBorder)
                     Button("送出") {
                         onSend(newText)
                         newText = ""
@@ -444,7 +434,7 @@ struct FishMeasureView: View {
     var onAdd: (FishAchievement) -> Void
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("釣魚資訊")) {
                     TextField("地點", text: $location)
@@ -476,7 +466,7 @@ struct FishMeasureView: View {
 
 // MARK: - Smart Recipe View
 struct FishRecipeView: View {
-    @EnvironmentObject var app: AppState
+    @Bindable var app: AppState
     @State private var fishName = ""
     @State private var sizeText = ""
     @State private var pantry = "" // 預留：冰箱食材（可選）
@@ -484,12 +474,12 @@ struct FishRecipeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("輸入魚種名稱（例：鯛魚）", text: $fishName)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .textFieldStyle(.roundedBorder)
             TextField("輸入魚長（cm）", text: $sizeText)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .textFieldStyle(.roundedBorder)
                 .keyboardType(.numberPad)
             TextField("可用食材（可留空，逗號分隔）", text: $pantry)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .textFieldStyle(.roundedBorder)
 
             Text("推薦菜單：").font(.headline)
 
@@ -500,19 +490,33 @@ struct FishRecipeView: View {
                 HStack {
                     Text("🍽️ " + dish)
                     Spacer()
-                    Button(action: {
-                        let activityVC = UIActivityViewController(activityItems: ["推薦菜單：\(dish)"], applicationActivities: nil)
-                        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                           let root = scene.windows.first?.rootViewController {
-                            root.present(activityVC, animated: true)
-                        }
-                    }) {
-                        Image(systemName: "square.and.arrow.up")
-                    }
+                    ShareRecipeButton(dish: dish)
                 }
             }
         }
         .padding(.horizontal)
+    }
+}
+
+struct ShareRecipeButton: View {
+    let dish: String
+
+    var body: some View {
+        Button(action: {
+            shareRecipe()
+        }) {
+            Image(systemName: "square.and.arrow.up")
+        }
+    }
+
+    func shareRecipe() {
+#if canImport(UIKit)
+        let activityVC = UIActivityViewController(activityItems: ["推薦菜單：\(dish)"], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.windows.first?.rootViewController {
+            root.present(activityVC, animated: true)
+        }
+#endif
     }
 }
 
@@ -548,7 +552,7 @@ func smartRecipes(for fish: String, size: Int, baseDB: [String: [String]], pantr
 
 // MARK: - Ranking + Badges
 struct RankingBadgesView: View {
-    @EnvironmentObject var app: AppState
+    @Bindable var app: AppState
     @State private var selection = 0
 
     var body: some View {
@@ -557,16 +561,16 @@ struct RankingBadgesView: View {
                 Text("排行榜").tag(0)
                 Text("徽章").tag(1)
             }
-            .pickerStyle(SegmentedPickerStyle())
+            .pickerStyle(.segmented)
 
-            if selection == 0 { RankingView() } else { BadgesView() }
+            if selection == 0 { RankingView(app: app) } else { BadgesView(app: app) }
         }
         .padding(.horizontal)
     }
 }
 
 struct RankingView: View {
-    @EnvironmentObject var app: AppState
+    @Bindable var app: AppState
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -586,13 +590,13 @@ struct RankingView: View {
                         .foregroundColor(.blue)
                 }
             }
-            .listStyle(PlainListStyle())
+            .listStyle(.plain)
         }
     }
 }
 
 struct BadgesView: View {
-    @EnvironmentObject var app: AppState
+    @Bindable var app: AppState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

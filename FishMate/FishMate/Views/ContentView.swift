@@ -14,6 +14,7 @@ struct ContentView: View {
                     Text("成就分享").tag(1)
                     Text("菜單推薦").tag(2)
                     Text("排行/徽章").tag(3)
+                    Text("天氣查詢").tag(4)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -22,10 +23,12 @@ struct ContentView: View {
 
                 Group {
                     switch selectedTab {
-                    case 0: FishingGroupView(app: app)
-                    case 1: FishAchievementsView(app: app)
-                    case 2: FishRecipeView(app: app)
-                    default: RankingBadgesView(app: app)
+                    case 0: AnyView(FishingGroupView(app: app))
+                    case 1: AnyView(FishAchievementsView(app: app))
+                    case 2: AnyView(FishRecipeView(app: app))
+                    case 3: AnyView(RankingBadgesView(app: app))
+                    case 4: AnyView(WeatherView()) // 不帶 app
+                    default: AnyView(WeatherView())
                     }
                 }
                 .padding()

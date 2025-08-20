@@ -3,7 +3,7 @@ import SwiftUI
 struct FishAchievementsView: View {
     @Bindable var app: AppState
     @State private var showingAdd = false
-    @State private var activeCommentsFor: FishAchievement? = nil
+    @State private var activeCommentsIndex: Int? = nil
 
     var body: some View {
         ZStack {
@@ -13,7 +13,8 @@ struct FishAchievementsView: View {
                     .padding(.horizontal)
 
                 List {
-                    ForEach(app.achievements) { fish in
+                    ForEach(app.achievements.indices, id: \.self) { i in
+                        let fish = app.achievements[i]
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -25,13 +26,12 @@ struct FishAchievementsView: View {
                                 Spacer()
                                 ShareButton(achievement: fish)
                             }
-
                             HStack(spacing: 16) {
                                 Button(action: { like(fish) }) {
-                                    Label("\(fish.likeCount)", systemImage: "hand.thumbsup")
+                                    Label("\(fish.likeCount)", systemImage: fish.likedUsers.contains("你") ? "hand.thumbsup.fill" : "hand.thumbsup")
                                 }
-
-                                Button(action: { activeCommentsFor = fish }) {
+                                .disabled(fish.likedUsers.contains("你"))
+                                Button(action: { activeCommentsIndex = i }) {
                                     Label("\(fish.comments.count)", systemImage: "text.bubble")
                                 }
                             }
@@ -44,7 +44,6 @@ struct FishAchievementsView: View {
                 .listStyle(.plain)
                 .background(.clear)
                 .scrollContentBackground(.hidden)
-
                 Spacer(minLength: 0)
             }
             .padding(.bottom, 80)
@@ -63,23 +62,21 @@ struct FishAchievementsView: View {
                 app.achievements.append(newAchievement)
             })
         }
-        .sheet(item: $activeCommentsFor) { ach in
-            CommentsSheet(achievement: ach) { text in
-                addComment(text, to: ach)
+        .sheet(isPresented: Binding(get: { activeCommentsIndex != nil },
+                                   set: { if !$0 { activeCommentsIndex = nil } })) {
+            if let idx = activeCommentsIndex {
+                CommentsSheet(comments: $app.achievements[idx].comments)
             }
         }
     }
 
     func like(_ achievement: FishAchievement) {
+        let userId = "你" // 或改成登入用戶ID
         if let idx = app.achievements.firstIndex(where: { $0.id == achievement.id }) {
-            app.achievements[idx].likeCount += 1
-        }
-    }
-
-    func addComment(_ text: String, to achievement: FishAchievement) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        if let idx = app.achievements.firstIndex(where: { $0.id == achievement.id }) {
-            app.achievements[idx].comments.append(Comment(author: "你", text: text))
+            if !app.achievements[idx].likedUsers.contains(userId) {
+                app.achievements[idx].likeCount += 1
+                app.achievements[idx].likedUsers.append(userId)
+            }
         }
     }
 }
@@ -96,51 +93,12 @@ struct ShareButton: View {
 
     func shareAchievement() {
         let text = "我在 \(achievement.location) 釣到了一條 \(achievement.species)，大小 \(achievement.sizeCM)cm！🎣"
-    #if canImport(UIKit)
+        #if canImport(UIKit)
         let activityVC = UIActivityViewController(activityItems: [text], applicationActivities: nil)
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootVC = scene.windows.first?.rootViewController {
             rootVC.present(activityVC, animated: true)
         }
-    #endif
+        #endif
     }
 }
-
-struct CommentsSheet: View {
-    let achievement: FishAchievement
-    var onSend: (String) -> Void
-
-    @Environment(\.dismiss) var dismiss
-    @State private var newText = ""
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading) {
-                List {
-                    Section("留言") {
-                        ForEach(achievement.comments) { c in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(c.author).font(.caption).foregroundColor(.secondary)
-                                Text(c.text)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                }
-
-                HStack {
-                    TextField("輸入留言…", text: $newText)
-                        .textFieldStyle(.roundedBorder)
-                    Button("送出") {
-                        onSend(newText)
-                        newText = ""
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding()
-            }
-            .navigationTitle("💬 留言板")
-            .toolbar { ToolbarItem(placement: .primaryAction) { Button("完成") { dismiss() } } }
-        }
-    }
-} 

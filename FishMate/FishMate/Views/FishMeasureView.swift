@@ -11,7 +11,7 @@ struct FishMeasureView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("釣魚紀錄")) {
+                Section(header: Text("釣魚記錄")) {
                     TextField("地點", text: $location)
                     TextField("魚種", text: $species)
                     TextField("大小 (cm)", text: $size)
@@ -26,6 +26,7 @@ struct FishMeasureView: View {
                             species: species,
                             sizeCM: sz,
                             likeCount: 0,
+                            likedUsers: [], // 初始化為空
                             comments: []
                         )
                         onAdd(achievement)

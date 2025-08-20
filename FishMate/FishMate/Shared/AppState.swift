@@ -10,8 +10,8 @@ final class AppState {
 
     // Achievements (social)
     var achievements: [FishAchievement] = [
-        FishAchievement(username: "你", location: "福隆海灘", species: "吳郭魚", sizeCM: 28, likeCount: 2, comments: [Comment(author: "Alice", text: "好厲害！")]),
-        FishAchievement(username: "你", location: "基隆港", species: "鯛魚", sizeCM: 35, likeCount: 1, comments: [])
+        FishAchievement(username: "你", location: "福隆海灘", species: "吳郭魚", sizeCM: 28, likeCount: 2,likedUsers: [], comments: [Comment(author: "Alice", text: "好厲害！")]),
+        FishAchievement(username: "你", location: "基隆港", species: "鯛魚", sizeCM: 35, likeCount: 1,likedUsers: [], comments: [])
     ] {
         didSet { recomputeBadgesAndRanking() }
     }

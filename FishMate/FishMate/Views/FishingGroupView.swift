@@ -37,6 +37,7 @@ struct FishingGroupView: View {
                             .padding(.horizontal)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .contentShape(Rectangle()) // 這行是關鍵！
                         .cornerRadius(8)
                         .onTapGesture { selectedGroupIndex = i }
                     }
@@ -51,18 +52,32 @@ struct FishingGroupView: View {
 
             VStack {
                 Spacer()
-                Button("我要參加") {
-                    if let index = selectedGroupIndex {
-                        if !app.groups[index].participants.contains("你") {
-                            app.groups[index].participants.append("你")
+                            // 按鈕會依據是否已參加顯示不同內容
+                            if let index = selectedGroupIndex {
+                                if app.groups[index].participants.contains("你") {
+                                    Button("取消參加") {
+                                        if let idx = app.groups[index].participants.firstIndex(of: "你") {
+                                            app.groups[index].participants.remove(at: idx)
+                                        }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.red)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 20)
+                                } else {
+                                    Button("我要參加") {
+                                        if !app.groups[index].participants.contains("你") {
+                                            app.groups[index].participants.append("你")
+                                        }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 20)
+                                }
+                            }
                         }
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal)
-                .padding(.bottom, 20)
-            }
 
             VStack {
                 Spacer()

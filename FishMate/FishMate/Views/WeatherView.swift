@@ -12,15 +12,9 @@ struct WeatherView: View {
                     }
                 }
                 .pickerStyle(.wheel)
-                .onChange(of: viewModel.selectedCity) { _, _ in
-                    viewModel.updateSelectedCityWeather()
-                }
-
-                Button("查詢天氣") {
+                .onChange(of: viewModel.selectedCity) {
                     Task { await viewModel.fetchWeather() }
                 }
-                .buttonStyle(.borderedProminent)
-                .padding(.bottom)
 
                 if viewModel.isLoading {
                     ProgressView().padding()
@@ -29,7 +23,7 @@ struct WeatherView: View {
                 } else if let info = viewModel.selectedCityWeather {
                     WeatherInfoCard(info: info)
                 } else {
-                    Text("請點選查詢天氣")
+                    Text("請選擇縣市")
                         .foregroundColor(.secondary)
                 }
                 Spacer()

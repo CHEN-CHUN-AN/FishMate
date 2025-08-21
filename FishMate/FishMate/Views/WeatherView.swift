@@ -16,11 +16,7 @@ struct WeatherView: View {
                     viewModel.updateSelectedCityWeather()
                 }
 
-                Button("查詢天氣") {
-                    Task { await viewModel.fetchWeather() }
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.bottom)
+                
 
                 if viewModel.isLoading {
                     ProgressView().padding()
@@ -34,7 +30,7 @@ struct WeatherView: View {
                 }
                 Spacer()
             }
-            .navigationTitle("天氣查詢")
+            .navigationTitle("一起趣釣魚")
             .padding()
         }
         .task {
@@ -48,7 +44,7 @@ struct WeatherView: View {
 struct WeatherInfoCard: View {
     let info: CityWeather
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 18) {
             Text(info.city)
                 .font(.title2)
             Text("\(info.startTime) ~ \(info.endTime)")

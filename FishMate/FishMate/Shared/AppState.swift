@@ -59,9 +59,9 @@ final class AppState {
             let maxSize = records.map(\.sizeCM).max() ?? 0
             let uniqueSpecies = Set(records.map(\.species)).count
             let activity = records.count
-            entries.append(RankingEntry(username: user, title: "最大魚王", score: maxSize))
-            entries.append(RankingEntry(username: user, title: "最多魚種", score: uniqueSpecies))
-            entries.append(RankingEntry(username: user, title: "最活躍釣友", score: activity))
+            entries.append(RankingEntry(username: "班傑明", title: "最大魚王", score: maxSize))
+            entries.append(RankingEntry(username: "愛麗絲", title: "最多魚種", score: uniqueSpecies))
+            entries.append(RankingEntry(username: "湯姆", title: "最活躍釣友", score: activity))
         }
         rankings = entries.sorted { $0.score > $1.score }.prefix(10).map { $0 }
     }

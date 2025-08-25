@@ -30,7 +30,7 @@ struct CreateGroupView: View {
     }
 
     func submitGroup() {
-        let apiURL = URL(string: "https://e62bf68bffb3.ngrok-free.app/api/Events")!
+        let apiURL = URL(string: "https://9c7cd56d201a.ngrok-free.app/api/Events")!
         let formatter = ISO8601DateFormatter()
         let parameters: [String: Any] = [
             "eventID": eventID, 

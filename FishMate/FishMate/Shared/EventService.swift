@@ -18,7 +18,7 @@ class EventService {
     // 從 API 獲取釣魚活動資料
     func fetchEvents() async throws -> [Event] {
         // 建立 URL
-        guard let url = URL(string: "https://e62bf68bffb3.ngrok-free.app/api/Events") else {
+        guard let url = URL(string: "https://9c7cd56d201a.ngrok-free.app/api/Events") else {
             throw URLError(.badURL)
         }
         
